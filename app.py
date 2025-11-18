@@ -91,7 +91,6 @@ def load_tm_model():
         return None
     
     try:
-        # Intenta cargar desde archivo local
         model = tf.keras.models.load_model("gestos.h5", compile=False)
         return model
     except FileNotFoundError:
@@ -180,7 +179,9 @@ def ejecutar_comando(comando: str):
         dev["ventilador"] = 1
 
     # Puerta
-    if "abrir puerta" in comando or "abre puerta" in comando:
+    if "abrir puerta" in comando o
+
+r "abre puerta" in comando:
         dev["puerta_cerrada"] = False
     if "cerrar puerta" in comando or "cierra puerta" in comando:
         dev["puerta_cerrada"] = True
@@ -345,9 +346,13 @@ elif pagina == "Control por ambiente":
 
     st.markdown("---")
     st.markdown("### 📊 Estado Actual")
+
+    # Texto del ventilador sin backslashes dentro de la expresión de f-string
+    vent_text = "❌ Apagado" if dev["ventilador"] == 0 else f"Velocidad {dev['ventilador']}"
+
     st.write(
         f"💡 **Luz:** {'🟢 Encendida' if dev['luz'] else '🔴 Apagada'} (Brillo: {dev['brillo']}%) | "
-        f"🌀 **Ventilador:** {'❌ Apagado' if dev['ventilador'] == 0 else f'Velocidad {dev[\"ventilador\"]}'} | "
+        f"🌀 **Ventilador:** {vent_text} | "
         f"🚪 **Puerta:** {'🔒 Cerrada' if dev['puerta_cerrada'] else '🔓 Abierta'} | "
         f"🔍 **Presencia:** {'👤 Sí' if dev['presencia'] else '🚫 No'}"
     )

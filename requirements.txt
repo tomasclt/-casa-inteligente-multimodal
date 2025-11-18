@@ -1,6 +1,7 @@
 streamlit
-tensorflow-cpu==2.13.0
+tensorflow-cpu==2.12.0
 pillow
 numpy
 paho-mqtt==1.6.1
 protobuf==3.20.3
+h5py==3.8.0

@@ -91,9 +91,14 @@ def load_tm_model():
         return None
     
     try:
+        # Intenta cargar desde archivo local
         model = tf.keras.models.load_model("gestos.h5", compile=False)
         return model
+    except FileNotFoundError:
+        st.sidebar.warning("⚠️ gestos.h5 no encontrado")
+        return None
     except Exception as e:
+        st.sidebar.error(f"❌ Error cargando modelo: {e}")
         return None
 
 
@@ -359,6 +364,22 @@ else:
             "1. Instala TensorFlow: `pip install tensorflow`\n\n"
             "2. Coloca el archivo `gestos.h5` en la raíz del proyecto\n\n"
             "3. Reinicia la aplicación"
+        )
+        
+        st.markdown("---")
+        st.markdown("### 📝 Instrucciones para crear el modelo:")
+        st.markdown(
+            "1. Ve a https://teachablemachine.withgoogle.com/train/image\n\n"
+            "2. Crea 4 clases con estos nombres EXACTOS:\n"
+            "   - `luz_on` (gesto: ✊ puño cerrado)\n"
+            "   - `luz_off` (gesto: ✋ mano abierta)\n"
+            "   - `puerta_abierta` (gesto: 👍 pulgar arriba)\n"
+            "   - `puerta_cerrada` (gesto: 👎 pulgar abajo)\n\n"
+            "3. Captura 50-100 fotos de cada gesto\n\n"
+            "4. Entrena el modelo (botón 'Train Model')\n\n"
+            "5. Exporta: Tensorflow → Keras → Download\n\n"
+            "6. Renombra `keras_model.h5` a `gestos.h5`\n\n"
+            "7. Colócalo en la misma carpeta que app.py"
         )
     else:
         st.markdown(

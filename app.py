@@ -91,7 +91,6 @@ def load_tm_model():
         return None
     
     try:
-        # Intenta cargar desde archivo local
         model = tf.keras.models.load_model("gestos.h5", compile=False)
         return model
     except FileNotFoundError:
@@ -179,7 +178,7 @@ def ejecutar_comando(comando: str):
     if ("encender ventilador" in comando or "enciende ventilador" in comando) and dev["ventilador"] == 0:
         dev["ventilador"] = 1
 
-    # Puerta  ✅ aquí estaba el error (ahora es "or", no "o")
+    # Puerta
     if "abrir puerta" in comando or "abre puerta" in comando:
         dev["puerta_cerrada"] = False
     if "cerrar puerta" in comando or "cierra puerta" in comando:
@@ -346,8 +345,104 @@ elif pagina == "Control por ambiente":
     st.markdown("---")
     st.markdown("### 📊 Estado Actual")
 
-    # ✅ aquí estaba el problema de la f-string con backslash
+    # Texto del estado, sin f-strings raras
     vent_text = "❌ Apagado" if dev["ventilador"] == 0 else f"Velocidad {dev['ventilador']}"
+    estado_luz = "🟢 Encendida" if dev["luz"] else "🔴 Apagada"
+    estado_puerta = "🔒 Cerrada" if dev["puerta_cerrada"] else "🔓 Abierta"
+    estado_pres = "👤 Sí" if dev["presencia"] else "🚫 No"
 
-    st.write(
-        f"💡 **Luz:** {'
+    estado_texto = (
+        "💡 **Luz:** {} (Brillo: {}%) | 🌀 **Ventilador:** {} | "
+        "🚪 **Puerta:** {} | 🔍 **Presencia:** {}"
+    ).format(estado_luz, dev["brillo"], vent_text, estado_puerta, estado_pres)
+
+    st.write(estado_texto)
+
+
+# ---------------- PÁGINA 3: CONTROL POR GESTOS ----------------
+else:
+    st.title("👋 Control por Gestos - Teachable Machine")
+
+    if not TM_AVAILABLE:
+        st.error("❌ El control por gestos no está disponible.")
+        st.info(
+            "**Requisitos faltantes:**\n\n"
+            "1. Instala TensorFlow: `pip install tensorflow`\n\n"
+            "2. Coloca el archivo `gestos.h5` en la raíz del proyecto\n\n"
+            "3. Reinicia la aplicación"
+        )
+        
+        st.markdown("---")
+        st.markdown("### 📝 Instrucciones para crear el modelo:")
+        st.markdown(
+            "1. Ve a https://teachablemachine.withgoogle.com/train/image\n\n"
+            "2. Crea 4 clases con estos nombres EXACTOS:\n"
+            "   - `luz_on` (gesto: ✊ puño cerrado)\n"
+            "   - `luz_off` (gesto: ✋ mano abierta)\n"
+            "   - `puerta_abierta` (gesto: 👍 pulgar arriba)\n"
+            "   - `puerta_cerrada` (gesto: 👎 pulgar abajo)\n\n"
+            "3. Captura 50-100 fotos de cada gesto\n\n"
+            "4. Entrena el modelo (botón 'Train Model')\n\n"
+            "5. Exporta: Tensorflow → Keras → Download\n\n"
+            "6. Renombra `keras_model.h5` a `gestos.h5`\n\n"
+            "7. Colócalo en la misma carpeta que app.py"
+        )
+    else:
+        st.markdown(
+            "Usa gestos frente a la cámara para controlar **la sala** (físicamente en Wokwi):\n\n"
+            "• 💡 **luz_on** → ✊ Puño cerrado → Enciende la luz (LED GPIO2)\n\n"
+            "• 💡 **luz_off** → ✋ Mano abierta → Apaga la luz (LED GPIO2)\n\n"
+            "• 🚪 **puerta_abierta** → 👍 Pulgar arriba → Abre la puerta (Servo 180°)\n\n"
+            "• 🚪 **puerta_cerrada** → 👎 Pulgar abajo → Cierra la puerta (Servo 0°)\n\n"
+            "**Los cambios se envían automáticamente al ESP32 en Wokwi vía MQTT.**"
+        )
+
+        foto = st.camera_input("📸 Haz tu gesto y toma la foto")
+
+        if foto is not None:
+            image = Image.open(foto)
+            st.image(image, caption="Imagen capturada", width=300)
+            
+            with st.spinner("🔍 Analizando gesto..."):
+                clase, prob = predict_gesto(image)
+
+            if clase:
+                st.success(f"🎯 **Gesto detectado:** `{clase}` (Confianza: {prob:.2%})")
+
+                dev = devices["sala"]
+
+                if clase == "luz_on":
+                    dev["luz"] = True
+                    st.info("💡 **Acción:** Luz de la sala ENCENDIDA → LED GPIO2 en Wokwi")
+                elif clase == "luz_off":
+                    dev["luz"] = False
+                    st.info("💡 **Acción:** Luz de la sala APAGADA → LED GPIO2 en Wokwi")
+                elif clase == "puerta_abierta":
+                    dev["puerta_cerrada"] = False
+                    st.info("🚪 **Acción:** Puerta ABIERTA → Servo a 180° en GPIO13 Wokwi")
+                elif clase == "puerta_cerrada":
+                    dev["puerta_cerrada"] = True
+                    st.info("🚪 **Acción:** Puerta CERRADA → Servo a 0° en GPIO13 Wokwi")
+
+                publish_sala_json()
+
+                st.markdown("---")
+                st.markdown("### 📊 Estado Actual de la Sala (Físico en Wokwi)")
+                
+                # Mostrar JSON enviado
+                payload_enviado = {
+                    "Act1": "ON" if dev["luz"] else "OFF",
+                    "Analog": 0 if dev["puerta_cerrada"] else 100
+                }
+                st.code(json.dumps(payload_enviado, indent=2), language="json")
+                
+                estado_luz_fisica = "🟢 ON" if dev["luz"] else "🔴 OFF"
+                estado_puerta_fisica = (
+                    "🔒 Cerrada (0°)" if dev["puerta_cerrada"] else "🔓 Abierta (180°)"
+                )
+                st.write(
+                    "💡 **Luz (LED GPIO2):** {} | 🚪 **Puerta (Servo GPIO13):** {}".format(
+                        estado_luz_fisica,
+                        estado_puerta_fisica,
+                    )
+                )

@@ -20,9 +20,10 @@ except ImportError:
 st.set_page_config(page_title="Casa Inteligente Multimodal", layout="wide")
 
 # --------- CONFIG MQTT (COINCIDE CON EL ESP32) ---------
-MQTT_BROKER = "157.230.214.127"   # Mismo que en el ESP32
+MQTT_BROKER = "157.230.214.127"   # El mismo que en el ESP32
 MQTT_PORT = 1883
 MQTT_TOPIC = "cmqtt_a"            # Topic al que se suscribe el ESP32
+
 
 @st.cache_resource
 def get_mqtt_client():
@@ -30,7 +31,6 @@ def get_mqtt_client():
     if not MQTT_AVAILABLE:
         return None
     try:
-        # Cliente básico (no tocamos nada raro)
         client = mqtt.Client()
         client.connect(MQTT_BROKER, MQTT_PORT, 60)
         client.loop_start()
@@ -39,17 +39,20 @@ def get_mqtt_client():
         st.sidebar.error(f"❌ Error MQTT: {e}")
         return None
 
+
 def publish_sala_json():
     """
-    Envía el estado de la SALA en el formato que espera el ESP32:
+    Envía el estado COMPLETO de la casa en el formato que espera el ESP32:
 
     {
-      "Act1": "ON"/"OFF",   -> luz sala (GPIO2)
-      "Analog": 0-100       -> puerta sala (servo GPIO13)
+      "Act1": "ON"/"OFF",   -> luz sala (LED D2)
+      "Act2": "ON"/"OFF",   -> luz habitación (LED D4)
+      "Vent": 0-3,          -> ventilador (LED D5 encendido si > 0)
+      "Analog": 0-100       -> puerta sala (servo D13)
     }
     """
     if not MQTT_AVAILABLE:
-        st.sidebar.warning("⚠️ MQTT no disponible en Python (paho-mqtt no instalado).")
+        st.sidebar.warning("⚠️ MQTT no disponible (falta paho-mqtt).")
         return
 
     client = get_mqtt_client()
@@ -57,13 +60,13 @@ def publish_sala_json():
         return
 
     sala = st.session_state.devices["sala"]
-
-    act1 = "ON" if sala["luz"] else "OFF"
-    analog = 0 if sala["puerta_cerrada"] else 100
+    hab = st.session_state.devices["habitacion"]
 
     payload = {
-        "Act1": act1,
-        "Analog": analog,
+        "Act1": "ON" if sala["luz"] else "OFF",
+        "Act2": "ON" if hab["luz"] else "OFF",
+        "Vent": sala["ventilador"],  # 0–3
+        "Analog": 0 if sala["puerta_cerrada"] else 100,
     }
 
     try:
@@ -91,9 +94,11 @@ def load_tm_model():
         st.sidebar.error(f"❌ Error cargando modelo de gestos: {e}")
         return None
 
+
 tm_model = load_tm_model()
 TM_AVAILABLE = tm_model is not None and TF_AVAILABLE
 TM_CLASSES = ["luz_on", "luz_off", "puerta_abierta", "puerta_cerrada"]
+
 
 def predict_gesto(image: Image.Image):
     """Clasifica un gesto usando el modelo de TM."""
@@ -138,7 +143,7 @@ devices = st.session_state.devices
 def ejecutar_comando(comando: str):
     comando = comando.lower().strip()
 
-    # A qué ambiente aplica
+    # Ambiente
     if "sala" in comando:
         room = "sala"
     elif "habitacion" in comando or "habitación" in comando or "cuarto" in comando:
@@ -155,7 +160,7 @@ def ejecutar_comando(comando: str):
     if "apagar luz" in comando or "apaga luz" in comando or "luz off" in comando:
         dev["luz"] = False
 
-    # Ventilador
+    # Ventilador (solo usamos el de la sala para el LED verde en el ESP32)
     if "subir ventilador" in comando or "sube ventilador" in comando:
         dev["ventilador"] = min(3, dev["ventilador"] + 1)
     if "bajar ventilador" in comando or "baja ventilador" in comando:
@@ -165,15 +170,14 @@ def ejecutar_comando(comando: str):
     if ("encender ventilador" in comando or "enciende ventilador" in comando) and dev["ventilador"] == 0:
         dev["ventilador"] = 1
 
-    # Puerta
+    # Puerta (controlamos la puerta de la sala físicamente)
     if "abrir puerta" in comando or "abre puerta" in comando:
-        dev["puerta_cerrada"] = False
+        devices["sala"]["puerta_cerrada"] = False
     if "cerrar puerta" in comando or "cierra puerta" in comando:
-        dev["puerta_cerrada"] = True
+        devices["sala"]["puerta_cerrada"] = True
 
-    # Publicar cambios si es la sala (la que está conectada al ESP32)
-    if room == "sala":
-        publish_sala_json()
+    # Publicar SIEMPRE el estado completo
+    publish_sala_json()
 
     st.success(f"✅ Comando aplicado en {room.capitalize()}")
 
@@ -251,26 +255,28 @@ if pagina == "Panel general":
                 luz_label = "💡 Apagar" if dev["luz"] else "💡 Encender"
                 if st.button(luz_label, key=f"btn_luz_{room}"):
                     dev["luz"] = not dev["luz"]
-                    if room == "sala":
-                        publish_sala_json()
+                    publish_sala_json()
                     st.rerun()
 
-            # Puerta
+            # Puerta (solo usa la de la sala, pero dejamos la lógica visual para ambas)
             with c2:
                 puerta_label = "🔓 Abrir" if dev["puerta_cerrada"] else "🔒 Cerrar"
                 if st.button(puerta_label, key=f"btn_puerta_{room}"):
                     dev["puerta_cerrada"] = not dev["puerta_cerrada"]
-                    if room == "sala":
-                        publish_sala_json()
+                    # Físicamente solo usamos la puerta de la sala
+                    devices["sala"]["puerta_cerrada"] = dev["puerta_cerrada"]
+                    publish_sala_json()
                     st.rerun()
 
     st.markdown("---")
     st.subheader("🔌 Simulación Física (ESP32 + Wokwi + MQTT)")
     st.info(
-        "**La SALA está conectada físicamente al ESP32:**\n\n"
-        "• 💡 **Luz sala** → LED GPIO2 del ESP32 (JSON: `Act1`)\n\n"
-        "• 🚪 **Puerta sala** → Servo GPIO13 del ESP32 (JSON: `Analog`)\n\n"
-        f"• 📡 **Comunicación MQTT:** Topic `{MQTT_TOPIC}` en `{MQTT_BROKER}`"
+        "Mapa físico actual:\n\n"
+        "• 💡 **Luz sala** → LED rojo D2 (JSON: `Act1`)\n"
+        "• 💡 **Luz habitación** → LED amarillo D4 (JSON: `Act2`)\n"
+        "• 🌀 **Ventilador** → LED verde D5 (JSON: `Vent > 0`)\n"
+        "• 🚪 **Puerta** → Servo D13 (JSON: `Analog` 0–100)\n\n"
+        f"• 📡 **MQTT:** Broker `{MQTT_BROKER}`, topic `{MQTT_TOPIC}`"
     )
 
 
@@ -291,8 +297,7 @@ elif pagina == "Control por ambiente":
         nueva_luz = st.toggle("Luz encendida", value=dev["luz"], key=f"toggle_luz_{room}")
         if nueva_luz != dev["luz"]:
             dev["luz"] = nueva_luz
-            if room == "sala":
-                publish_sala_json()
+            publish_sala_json()
 
         dev["brillo"] = st.slider("Brillo (%)", 0, 100, dev["brillo"], key=f"brillo_{room}")
 
@@ -303,18 +308,20 @@ elif pagina == "Control por ambiente":
             0, 3, dev["ventilador"],
             key=f"vent_{room}"
         )
+        # Usamos solo el ventilador de la sala para el LED verde
+        devices["sala"]["ventilador"] = devices["sala"]["ventilador"] if room != "sala" else dev["ventilador"]
+        publish_sala_json()
 
     st.markdown("---")
 
     col3, col4 = st.columns(2)
 
     with col3:
-        st.markdown("#### 🚪 Puerta")
-        puerta_label = "🔒 Cerrada" if dev["puerta_cerrada"] else "🔓 Abierta"
-        if st.button(f"Cambiar estado: {puerta_label}", key=f"btn_puerta_det_{room}"):
-            dev["puerta_cerrada"] = not dev["puerta_cerrada"]
-            if room == "sala":
-                publish_sala_json()
+        st.markdown("#### 🚪 Puerta (Sala)")
+        puerta_label = "🔒 Cerrada" if devices["sala"]["puerta_cerrada"] else "🔓 Abierta"
+        if st.button(f"Cambiar estado puerta sala: {puerta_label}", key=f"btn_puerta_det_sala"):
+            devices["sala"]["puerta_cerrada"] = not devices["sala"]["puerta_cerrada"]
+            publish_sala_json()
             st.rerun()
 
     with col4:
@@ -325,21 +332,17 @@ elif pagina == "Control por ambiente":
             key=f"presencia_{room}"
         )
 
-    if room == "sala":
-        if st.button("📤 Enviar estado al ESP32"):
-            publish_sala_json()
-
     st.markdown("---")
     st.markdown("### 📊 Estado Actual")
 
     vent_text = "❌ Apagado" if dev["ventilador"] == 0 else f"Velocidad {dev['ventilador']}"
     estado_luz = "🟢 Encendida" if dev["luz"] else "🔴 Apagada"
-    estado_puerta = "🔒 Cerrada" if dev["puerta_cerrada"] else "🔓 Abierta"
+    estado_puerta = "🔒 Cerrada" if devices["sala"]["puerta_cerrada"] else "🔓 Abierta"
     estado_pres = "👤 Sí" if dev["presencia"] else "🚫 No"
 
     estado_texto = (
         "💡 **Luz:** {} (Brillo: {}%) | 🌀 **Ventilador:** {} | "
-        "🚪 **Puerta:** {} | 🔍 **Presencia:** {}"
+        "🚪 **Puerta sala:** {} | 🔍 **Presencia:** {}"
     ).format(estado_luz, dev["brillo"], vent_text, estado_puerta, estado_pres)
 
     st.write(estado_texto)
@@ -359,12 +362,12 @@ else:
         )
     else:
         st.markdown(
-            "Usa gestos frente a la cámara para controlar **la sala**:\n\n"
-            "• 💡 `luz_on` → ✊ Puño cerrado → Enciende la luz (LED GPIO2)\n"
-            "• 💡 `luz_off` → ✋ Mano abierta → Apaga la luz (LED GPIO2)\n"
-            "• 🚪 `puerta_abierta` → 👍 Pulgar arriba → Abre la puerta (Servo 180°)\n"
-            "• 🚪 `puerta_cerrada` → 👎 Pulgar abajo → Cierra la puerta (Servo 0°)\n\n"
-            "**Los cambios se envían al ESP32 vía MQTT usando el topic `cmqtt_a`.**"
+            "Usa gestos frente a la cámara para controlar **LA SALA**:\n\n"
+            "• 💡 `luz_on` → ✊ Puño cerrado → Enciende la luz sala (LED rojo D2)\n"
+            "• 💡 `luz_off` → ✋ Mano abierta → Apaga la luz sala\n"
+            "• 🚪 `puerta_abierta` → 👍 Pulgar arriba → Abre puerta (Servo D13 a 180°)\n"
+            "• 🚪 `puerta_cerrada` → 👎 Pulgar abajo → Cierra puerta (Servo D13 a 0°)\n\n"
+            "**Todos los cambios se envían al ESP32 vía MQTT usando el topic `cmqtt_a`.**"
         )
 
         foto = st.camera_input("📸 Haz tu gesto y toma la foto")
@@ -377,27 +380,28 @@ else:
                 clase, prob = predict_gesto(image)
 
             if clase:
-                st.success(f"🎯 Gesto detectado: `{clase}` (Confianza: {prob:.2%})")
+                st.success(f"Gesto detectado: `{clase}` (Confianza: {prob:.2%})")
 
-                dev = devices["sala"]
+                dev_sala = devices["sala"]
 
                 if clase == "luz_on":
-                    dev["luz"] = True
+                    dev_sala["luz"] = True
                 elif clase == "luz_off":
-                    dev["luz"] = False
+                    dev_sala["luz"] = False
                 elif clase == "puerta_abierta":
-                    dev["puerta_cerrada"] = False
+                    dev_sala["puerta_cerrada"] = False
                 elif clase == "puerta_cerrada":
-                    dev["puerta_cerrada"] = True
+                    dev_sala["puerta_cerrada"] = True
 
-                # Enviar al ESP32
                 publish_sala_json()
 
                 st.markdown("---")
-                st.markdown("### 📊 JSON enviado al ESP32 (Wokwi)")
+                st.markdown("### 📊 JSON enviado al ESP32")
                 payload_enviado = {
-                    "Act1": "ON" if dev["luz"] else "OFF",
-                    "Analog": 0 if dev["puerta_cerrada"] else 100
+                    "Act1": "ON" if dev_sala["luz"] else "OFF",
+                    "Act2": "ON" if devices["habitacion"]["luz"] else "OFF",
+                    "Vent": dev_sala["ventilador"],
+                    "Analog": 0 if dev_sala["puerta_cerrada"] else 100,
                 }
                 st.code(json.dumps(payload_enviado, indent=2), language="json")
 

@@ -12,7 +12,7 @@ paho-mqtt>=1.6.1
 # Solo descomenta si necesitas control por gestos
 # ADVERTENCIA: TensorFlow es pesado (~400MB) y puede fallar en Streamlit Cloud
 # 
-# tensorflow-cpu>=2.13.0,<2.14.0
+ tensorflow-cpu>=2.13.0,<2.14.0
 #
 # Alternativa más ligera (recomendada):
 # tflite-runtime>=2.13.0

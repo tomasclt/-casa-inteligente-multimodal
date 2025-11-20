@@ -22,7 +22,7 @@ st.set_page_config(page_title="Casa Inteligente Multimodal", layout="wide")
 # --------- CONFIG MQTT (BROKER PÚBLICO PARA PRUEBAS) ---------
 MQTT_BROKER = "broker.hivemq.com"   # Broker público estable para pruebas
 MQTT_PORT = 1883
-MQTT_TOPIC = "cmqtt_a"              # Topic al que se suscribe el ESP32
+MQTT_TOPIC = "cmqtt_s"              # Topic al que se suscribe el ESP32
 
 
 @st.cache_resource

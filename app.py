@@ -12,9 +12,9 @@ st.set_page_config(page_title="Casa Inteligente MQTT", layout="wide")
 st.title("🏠 Casa Inteligente - Control desde Streamlit")
 
 # --------- CONFIG MQTT ---------
-MQTT_BROKER = "broker.hivemq.com"
+MQTT_BROKER = "broker.emqx.io"
 MQTT_PORT = 1883
-MQTT_TOPIC = "cmqtt_a"
+MQTT_TOPIC = "tomasclt"
 
 st.sidebar.markdown("### 🛰️ Config MQTT")
 st.sidebar.write(f"**Broker:** `{MQTT_BROKER}`")

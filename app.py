@@ -20,7 +20,7 @@ except ImportError:
 st.set_page_config(page_title="Casa Inteligente Multimodal", layout="wide")
 
 # --------- CONFIG MQTT (COINCIDE CON EL ESP32) ---------
-MQTT_BROKER = "157.230.214.127"   # El mismo que en el ESP32
+MQTT_BROKER = "host.wokwi.internal"   # El mismo que en el ESP32
 MQTT_PORT = 1883
 MQTT_TOPIC = "cmqtt_a"            # Topic al que se suscribe el ESP32
 

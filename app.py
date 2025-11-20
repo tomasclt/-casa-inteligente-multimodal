@@ -11,10 +11,10 @@ TM_AVAILABLE = False
 
 # OPCIÓN B: Descomenta esto si quieres usar gestos (requiere tensorflow-cpu en requirements)
 try:
-     import tensorflow as tf
-     TF_AVAILABLE = True
- except ImportError:
-     TF_AVAILABLE = False
+    import tensorflow as tf
+    TF_AVAILABLE = True
+except ImportError:
+    TF_AVAILABLE = False
 
 try:
     import paho.mqtt.client as mqtt
@@ -62,24 +62,24 @@ def get_mqtt_client():
     if not MQTT_AVAILABLE:
         mqtt_status["last_error"] = "paho-mqtt no instalado"
         return None
-    
+
     try:
         # Cliente único por sesión
         client = mqtt.Client(client_id=f"StreamlitCasa-{int(time.time() * 1000)}")
         client.on_connect = on_connect
         client.on_disconnect = on_disconnect
         client.on_publish = on_publish
-        
+
         # Conectar al broker
         client.connect(MQTT_BROKER, MQTT_PORT, 60)
         client.loop_start()
-        
+
         # Dar tiempo para conectar
         for _ in range(20):  # Esperar máximo 2 segundos
             if mqtt_status["connected"]:
                 break
             time.sleep(0.1)
-        
+
         return client
     except Exception as e:
         mqtt_status["last_error"] = str(e)
@@ -89,7 +89,7 @@ def get_mqtt_client():
 def publish_casa_json():
     """
     Envía JSON al ESP32 vía MQTT.
-    
+
     Formato:
     {
       "Act1": "ON"/"OFF",   -> Luz sala (LED D2 rojo)
@@ -104,7 +104,7 @@ def publish_casa_json():
 
     client = get_mqtt_client()
     if client is None:
-        st.sidebar.error(f"❌ Cliente MQTT no disponible")
+        st.sidebar.error("❌ Cliente MQTT no disponible")
         return False
 
     sala = st.session_state.devices["sala"]
@@ -120,17 +120,17 @@ def publish_casa_json():
     try:
         json_str = json.dumps(payload)
         result = client.publish(MQTT_TOPIC, json_str, qos=1)
-        
+
         # Esperar confirmación
         result.wait_for_publish(timeout=2)
-        
+
         if result.is_published():
             st.sidebar.success(f"✅ Enviado: `{json_str}`")
             return True
         else:
             st.sidebar.error("❌ Mensaje no confirmado")
             return False
-            
+
     except Exception as e:
         st.sidebar.error(f"❌ Error: {str(e)[:50]}")
         return False
@@ -146,7 +146,7 @@ def load_tm_model():
         import tensorflow as tf
         model = tf.keras.models.load_model("gestos.h5", compile=False)
         return model
-    except:
+    except Exception:
         return None
 
 
@@ -233,7 +233,7 @@ def ejecutar_comando(comando: str):
         dev["ventilador"] = 1
         cambio = True
 
-    # Puerta
+    # Puerta (solo sala)
     if any(x in comando for x in ["abrir puerta", "abre puerta"]):
         devices["sala"]["puerta_cerrada"] = False
         cambio = True
@@ -282,7 +282,7 @@ st.sidebar.markdown("### 📊 Estado del Sistema")
 # MQTT
 if MQTT_AVAILABLE:
     st.sidebar.success("✅ paho-mqtt instalado")
-    
+
     client = get_mqtt_client()
     if client and mqtt_status["connected"]:
         st.sidebar.success("✅ MQTT conectado")
@@ -323,13 +323,13 @@ if st.sidebar.button("🔄 Reconectar MQTT", use_container_width=True):
 # --------- PÁGINA 1: PANEL GENERAL ---------
 if pagina == "🏠 Panel General":
     st.title("🏠 Panel General - Control de Casa")
-    
+
     # Indicador de conexión grande
     if mqtt_status["connected"]:
         st.success("🟢 **Sistema conectado al ESP32**")
     else:
         st.error("🔴 **Sistema desconectado** - Verifica ESP32 y WiFi")
-    
+
     st.markdown("---")
 
     col1, col2 = st.columns(2)
@@ -344,22 +344,16 @@ if pagina == "🏠 Panel General":
                 st.subheader("📍 HABITACIÓN")
 
             # Métricas
-            luz_icon = "🟢" if dev["luz"] else "🔴"
             luz_text = "Encendida" if dev["luz"] else "Apagada"
-            
-            vent_icon = "🌀" if dev["ventilador"] > 0 else "❌"
             vent_text = f"Vel. {dev['ventilador']}" if dev["ventilador"] > 0 else "Apagado"
-            
-            puerta_icon = "🔒" if dev["puerta_cerrada"] else "🔓"
             puerta_text = "Cerrada" if dev["puerta_cerrada"] else "Abierta"
 
-            # Métricas visuales
             m1, m2 = st.columns(2)
             with m1:
-                st.metric("💡 Luz", luz_text, delta=None)
+                st.metric("💡 Luz", luz_text)
             with m2:
                 st.metric("🌀 Ventilador", vent_text)
-            
+
             m3, m4 = st.columns(2)
             with m3:
                 st.metric("🚪 Puerta", puerta_text)
@@ -414,22 +408,24 @@ if pagina == "🏠 Panel General":
                         st.rerun()
 
     st.markdown("---")
-    
-    # Información del hardware
+
     with st.expander("🔌 Mapa de Hardware ESP32", expanded=False):
-        st.code("""
+        st.code(
+            """
 ╔═══════════════════════════════════════════╗
 ║        CONEXIONES FÍSICAS ESP32           ║
 ╠═══════════════════════════════════════════╣
-║ 💡 Luz Sala       → LED Rojo D2  (Act1)  ║
-║ 💡 Luz Habitación → LED Amarillo D4(Act2)║
-║ 🌀 Ventilador     → LED Verde D5  (Vent) ║
-║ 🚪 Puerta Servo   → Servo D13   (Analog) ║
+║ 💡 Luz Sala       → LED Rojo D2  (Act1)   ║
+║ 💡 Luz Habitación → LED Amarillo D4(Act2) ║
+║ 🌀 Ventilador     → LED Verde D5  (Vent)  ║
+║ 🚪 Puerta Servo   → Servo D13   (Analog)  ║
 ╠═══════════════════════════════════════════╣
 ║ 📡 MQTT: broker.emqx.io:1883              ║
 ║ 📨 Topic: tomasclt                        ║
 ╚═══════════════════════════════════════════╝
-        """, language="text")
+            """,
+            language="text",
+        )
 
 
 # --------- PÁGINA 2: CONTROL DETALLADO ---------
@@ -439,7 +435,7 @@ elif pagina == "🎛️ Control Detallado":
     room = st.selectbox(
         "📍 Selecciona ambiente",
         ["sala", "habitacion"],
-        format_func=lambda x: "SALA" if x == "sala" else "HABITACIÓN"
+        format_func=lambda x: "SALA" if x == "sala" else "HABITACIÓN",
     )
     dev = devices[room]
 
@@ -451,9 +447,7 @@ elif pagina == "🎛️ Control Detallado":
     with col1:
         st.markdown("#### 💡 Iluminación")
         nueva_luz = st.toggle(
-            "Luz encendida",
-            value=dev["luz"],
-            key=f"toggle_luz_{room}"
+            "Luz encendida", value=dev["luz"], key=f"toggle_luz_{room}"
         )
         if nueva_luz != dev["luz"]:
             dev["luz"] = nueva_luz
@@ -463,9 +457,11 @@ elif pagina == "🎛️ Control Detallado":
 
         dev["brillo"] = st.slider(
             "Brillo (%)",
-            0, 100, dev["brillo"],
+            0,
+            100,
+            dev["brillo"],
             key=f"brillo_{room}",
-            help="Simulación visual (no envía al ESP32)"
+            help="Simulación visual (no envía al ESP32)",
         )
 
     # Ventilación
@@ -473,9 +469,11 @@ elif pagina == "🎛️ Control Detallado":
         st.markdown("#### 🌀 Ventilación")
         nuevo_vent = st.slider(
             "Velocidad",
-            0, 3, dev["ventilador"],
+            0,
+            3,
+            dev["ventilador"],
             key=f"slider_vent_{room}",
-            help="0=Apagado, 1-3=Velocidad"
+            help="0=Apagado, 1-3=Velocidad",
         )
         if nuevo_vent != dev["ventilador"]:
             dev["ventilador"] = nuevo_vent
@@ -512,7 +510,7 @@ elif pagina == "🎛️ Control Detallado":
         st.markdown("#### 🚪 Puerta (Sala)")
         estado = "🔒 Cerrada" if devices["sala"]["puerta_cerrada"] else "🔓 Abierta"
         st.info(f"**Estado actual:** {estado}")
-        
+
         pc1, pc2 = st.columns(2)
         with pc1:
             if st.button("🔓 Abrir", key="puerta_abrir", use_container_width=True):
@@ -532,7 +530,7 @@ elif pagina == "🎛️ Control Detallado":
             "Persona presente",
             value=dev["presencia"],
             key=f"pres_{room}",
-            help="Simulación de sensor PIR"
+            help="Simulación de sensor PIR",
         )
         if nueva_pres != dev["presencia"]:
             dev["presencia"] = nueva_pres
@@ -556,10 +554,11 @@ else:
 
     if not TM_AVAILABLE:
         st.error("❌ Control por gestos NO disponible")
-        
-        st.markdown("""
+
+        st.markdown(
+            """
         ### 📋 Para activar los gestos:
-        
+
         1. **Entrena tu modelo** en [Teachable Machine](https://teachablemachine.withgoogle.com/)
         2. **Exporta como Keras** y descarga `gestos.h5`
         3. **Sube el archivo** a tu repositorio (raíz del proyecto)
@@ -567,46 +566,49 @@ else:
         ```
         tensorflow-cpu>=2.13.0
         ```
-        5. **Descomenta** las líneas 7-12 en `app.py`
+        5. **Descomenta** las líneas de import de TensorFlow
         6. **Redeploy** en Streamlit Cloud
-        
+
         ⚠️ **Nota:** TensorFlow es pesado. Si no necesitas gestos, usa solo MQTT (más rápido).
-        """)
-        
+        """
+        )
+
     else:
         st.success("✅ Modelo de gestos cargado correctamente")
-        
-        st.markdown("""
+
+        st.markdown(
+            """
         **Gestos disponibles para controlar LA SALA:**
-        
+
         | Gesto | Acción | LED Afectado |
         |-------|--------|--------------|
         | ✊ Puño cerrado | `luz_on` | LED Rojo D2 ON |
         | ✋ Mano abierta | `luz_off` | LED Rojo D2 OFF |
         | 👍 Pulgar arriba | `puerta_abierta` | Servo D13 → 180° |
         | 👎 Pulgar abajo | `puerta_cerrada` | Servo D13 → 0° |
-        """)
+        """
+        )
 
         foto = st.camera_input("📸 Captura tu gesto")
 
         if foto is not None:
             image = Image.open(foto)
-            
+
             col1, col2 = st.columns([1, 2])
-            
+
             with col1:
                 st.image(image, caption="Gesto capturado", use_container_width=True)
-            
+
             with col2:
                 with st.spinner("🔍 Analizando gesto..."):
                     clase, prob = predict_gesto(image)
 
                 if clase:
-                    # Mostrar resultado
                     confianza_color = "🟢" if prob > 0.7 else "🟡" if prob > 0.5 else "🔴"
-                    st.success(f"{confianza_color} **Gesto:** `{clase}` | **Confianza:** {prob:.1%}")
+                    st.success(
+                        f"{confianza_color} **Gesto:** `{clase}` | **Confianza:** {prob:.1%}"
+                    )
 
-                    # Ejecutar acción
                     dev_sala = devices["sala"]
                     cambio = False
 
@@ -627,7 +629,6 @@ else:
                         cambio = True
                         st.info("🔒 Puerta: **CERRADA**")
 
-                    # Enviar al ESP32
                     if cambio:
                         if publish_casa_json():
                             st.markdown("---")
@@ -635,9 +636,11 @@ else:
                                 "Act1": "ON" if dev_sala["luz"] else "OFF",
                                 "Act2": "ON" if devices["habitacion"]["luz"] else "OFF",
                                 "Vent": dev_sala["ventilador"],
-                                "Analog": 0 if dev_sala["puerta_cerrada"] else 100,
+                                "Analog": 0
+                                if dev_sala["puerta_cerrada"]
+                                else 100,
                             }
-                            
+
                             st.success("✅ **Comando enviado al ESP32**")
                             st.json(payload)
                         else:

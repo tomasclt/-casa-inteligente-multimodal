@@ -35,7 +35,7 @@ def get_mqtt_client():
         client.loop_start()
         return client
     except Exception as e:
-        st.sidebar.error(f"❌ Error MQTT: {e}")
+        st.sidebar.error(f"❌ Error MQTT al conectar: {e}")
         return None
 
 
@@ -44,6 +44,15 @@ if client is None:
     st.stop()
 
 st.sidebar.success("✅ Cliente MQTT inicializado (lado Python)")
+
+# ---- TEST RÁPIDO MQTT ----
+if st.sidebar.button("🔍 Probar envío de prueba"):
+    test_payload = {"Act1": "ON", "Act2": "OFF", "Vent": 0, "Analog": 0}
+    try:
+        client.publish(MQTT_TOPIC, json.dumps(test_payload))
+        st.sidebar.success(f"📤 Test enviado: {test_payload}")
+    except Exception as e:
+        st.sidebar.error(f"❌ Error enviando test MQTT: {e}")
 
 # --------- ESTADO INICIAL ---------
 if "devices" not in st.session_state:
@@ -57,6 +66,8 @@ if "devices" not in st.session_state:
             "luz": False,
         },
     }
+if "last_payload" not in st.session_state:
+    st.session_state.last_payload = None
 
 devices = st.session_state.devices
 
@@ -75,6 +86,7 @@ def publish_state():
 
     try:
         client.publish(MQTT_TOPIC, json.dumps(payload))
+        st.session_state.last_payload = payload
         st.sidebar.success(f"📤 Enviado: {payload}")
         return payload
     except Exception as e:
@@ -143,3 +155,9 @@ st.write(
     f"**Habitación:** Luz: {'ON' if hab['luz'] else 'OFF'}"
 )
 
+st.markdown("---")
+st.markdown("### 📦 Último JSON enviado al ESP32")
+if st.session_state.last_payload is not None:
+    st.code(json.dumps(st.session_state.last_payload, indent=2), language="json")
+else:
+    st.write("Aún no se ha enviado ningún payload.")

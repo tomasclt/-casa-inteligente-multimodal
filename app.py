@@ -9,12 +9,12 @@ import time
 TF_AVAILABLE = False
 TM_AVAILABLE = False
 
-# OPCIÓN B: Descomenta esto si quieres usar gestos (requiere tensorflow-cpu en requirements)
-# try:
-#     import tensorflow as tf
-#     TF_AVAILABLE = True
-# except ImportError:
-#     TF_AVAILABLE = False
+ OPCIÓN B: Descomenta esto si quieres usar gestos (requiere tensorflow-cpu en requirements)
+try:
+     import tensorflow as tf
+     TF_AVAILABLE = True
+ except ImportError:
+     TF_AVAILABLE = False
 
 try:
     import paho.mqtt.client as mqtt

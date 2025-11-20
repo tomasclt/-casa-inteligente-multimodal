@@ -1,5 +1,38 @@
+# ============================================
+# REQUIREMENTS.TXT - Casa Inteligente IoT
+# ============================================
+
+# --- CORE (OBLIGATORIOS) ---
 streamlit>=1.28.0
 numpy>=1.24.0
 Pillow>=10.0.0
 paho-mqtt>=1.6.1
-tensorflow>=2.13.0
+
+# --- TENSORFLOW (OPCIONAL) ---
+# Solo descomenta si necesitas control por gestos
+# ADVERTENCIA: TensorFlow es pesado (~400MB) y puede fallar en Streamlit Cloud
+# 
+# tensorflow-cpu>=2.13.0,<2.14.0
+#
+# Alternativa más ligera (recomendada):
+# tflite-runtime>=2.13.0
+
+# ============================================
+# NOTAS DE DEPLOYMENT:
+# 
+# 1. Para probar MQTT sin gestos (MÁS RÁPIDO):
+#    - Usa solo las librerías CORE
+#    - Los gestos estarán desactivados
+#    - MQTT funcionará perfectamente
+#
+# 2. Para habilitar gestos:
+#    - Descomenta tensorflow-cpu
+#    - Sube gestos.h5 a GitHub
+#    - Si el archivo > 25MB, usa Git LFS
+#    - Deploy puede tardar 5-10 minutos
+#
+# 3. Si tensorflow falla en Streamlit Cloud:
+#    - Usa tflite-runtime (más ligero)
+#    - Convierte gestos.h5 a .tflite
+#    - O desactiva gestos completamente
+# ============================================

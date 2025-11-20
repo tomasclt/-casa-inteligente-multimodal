@@ -19,10 +19,10 @@ except ImportError:
 # --------- CONFIG STREAMLIT ---------
 st.set_page_config(page_title="Casa Inteligente Multimodal", layout="wide")
 
-# --------- CONFIG MQTT (COINCIDE CON EL ESP32) ---------
-MQTT_BROKER = "host.wokwi.internal"   # El mismo que en el ESP32
+# --------- CONFIG MQTT (BROKER PÚBLICO PARA PRUEBAS) ---------
+MQTT_BROKER = "broker.hivemq.com"   # Broker público estable para pruebas
 MQTT_PORT = 1883
-MQTT_TOPIC = "cmqtt_a"            # Topic al que se suscribe el ESP32
+MQTT_TOPIC = "cmqtt_a"              # Topic al que se suscribe el ESP32
 
 
 @st.cache_resource
@@ -40,7 +40,7 @@ def get_mqtt_client():
         return None
 
 
-def publish_sala_json():
+def publish_casa_json():
     """
     Envía el estado COMPLETO de la casa en el formato que espera el ESP32:
 
@@ -160,7 +160,7 @@ def ejecutar_comando(comando: str):
     if "apagar luz" in comando or "apaga luz" in comando or "luz off" in comando:
         dev["luz"] = False
 
-    # Ventilador (solo usamos el de la sala para el LED verde en el ESP32)
+    # Ventilador (control lógico por ambiente, pero físicamente usamos el de la sala)
     if "subir ventilador" in comando or "sube ventilador" in comando:
         dev["ventilador"] = min(3, dev["ventilador"] + 1)
     if "bajar ventilador" in comando or "baja ventilador" in comando:
@@ -170,14 +170,14 @@ def ejecutar_comando(comando: str):
     if ("encender ventilador" in comando or "enciende ventilador" in comando) and dev["ventilador"] == 0:
         dev["ventilador"] = 1
 
-    # Puerta (controlamos la puerta de la sala físicamente)
+    # Puerta (solo la de la sala existe físicamente)
     if "abrir puerta" in comando or "abre puerta" in comando:
         devices["sala"]["puerta_cerrada"] = False
     if "cerrar puerta" in comando or "cierra puerta" in comando:
         devices["sala"]["puerta_cerrada"] = True
 
-    # Publicar SIEMPRE el estado completo
-    publish_sala_json()
+    # Publicar estado completo
+    publish_casa_json()
 
     st.success(f"✅ Comando aplicado en {room.capitalize()}")
 
@@ -242,7 +242,7 @@ if pagina == "Panel general":
 
             st.metric("💡 Luz", luz_estado)
             st.metric("🌀 Ventilador", vent_estado)
-            st.metric("🚪 Puerta", puerta_estado)
+            st.metric("🚪 Puerta (solo sala física)", puerta_estado)
             st.metric("🔍 Sensor", presencia_estado)
 
             st.markdown("---")
@@ -255,17 +255,17 @@ if pagina == "Panel general":
                 luz_label = "💡 Apagar" if dev["luz"] else "💡 Encender"
                 if st.button(luz_label, key=f"btn_luz_{room}"):
                     dev["luz"] = not dev["luz"]
-                    publish_sala_json()
+                    publish_casa_json()
                     st.rerun()
 
-            # Puerta (solo usa la de la sala, pero dejamos la lógica visual para ambas)
+            # Puerta (sincronizamos puerta lógica, pero físicamente solo sala)
             with c2:
                 puerta_label = "🔓 Abrir" if dev["puerta_cerrada"] else "🔒 Cerrar"
                 if st.button(puerta_label, key=f"btn_puerta_{room}"):
                     dev["puerta_cerrada"] = not dev["puerta_cerrada"]
-                    # Físicamente solo usamos la puerta de la sala
+                    # Puerta física = estado de la sala
                     devices["sala"]["puerta_cerrada"] = dev["puerta_cerrada"]
-                    publish_sala_json()
+                    publish_casa_json()
                     st.rerun()
 
     st.markdown("---")
@@ -297,7 +297,7 @@ elif pagina == "Control por ambiente":
         nueva_luz = st.toggle("Luz encendida", value=dev["luz"], key=f"toggle_luz_{room}")
         if nueva_luz != dev["luz"]:
             dev["luz"] = nueva_luz
-            publish_sala_json()
+            publish_casa_json()
 
         dev["brillo"] = st.slider("Brillo (%)", 0, 100, dev["brillo"], key=f"brillo_{room}")
 
@@ -308,9 +308,10 @@ elif pagina == "Control por ambiente":
             0, 3, dev["ventilador"],
             key=f"vent_{room}"
         )
-        # Usamos solo el ventilador de la sala para el LED verde
-        devices["sala"]["ventilador"] = devices["sala"]["ventilador"] if room != "sala" else dev["ventilador"]
-        publish_sala_json()
+        # Físicamente usamos el ventilador de la sala
+        if room == "sala":
+            devices["sala"]["ventilador"] = dev["ventilador"]
+        publish_casa_json()
 
     st.markdown("---")
 
@@ -319,9 +320,9 @@ elif pagina == "Control por ambiente":
     with col3:
         st.markdown("#### 🚪 Puerta (Sala)")
         puerta_label = "🔒 Cerrada" if devices["sala"]["puerta_cerrada"] else "🔓 Abierta"
-        if st.button(f"Cambiar estado puerta sala: {puerta_label}", key=f"btn_puerta_det_sala"):
+        if st.button(f"Cambiar estado puerta sala: {puerta_label}", key="btn_puerta_det_sala"):
             devices["sala"]["puerta_cerrada"] = not devices["sala"]["puerta_cerrada"]
-            publish_sala_json()
+            publish_casa_json()
             st.rerun()
 
     with col4:
@@ -393,7 +394,7 @@ else:
                 elif clase == "puerta_cerrada":
                     dev_sala["puerta_cerrada"] = True
 
-                publish_sala_json()
+                publish_casa_json()
 
                 st.markdown("---")
                 st.markdown("### 📊 JSON enviado al ESP32")

@@ -1,7 +1,5 @@
-streamlit
-tensorflow-cpu==2.12.0
-pillow
-numpy
-paho-mqtt==1.6.1
-protobuf==3.20.3
-h5py==3.8.0
+streamlit>=1.28.0
+numpy>=1.24.0
+Pillow>=10.0.0
+paho-mqtt>=1.6.1
+tensorflow>=2.13.0
